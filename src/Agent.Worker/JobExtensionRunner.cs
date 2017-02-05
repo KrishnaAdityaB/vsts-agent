@@ -30,6 +30,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
         public bool Enabled { get; private set; }
         public IExecutionContext ExecutionContext { get; set; }
         public bool Finally { get; private set; }
+        public TimeSpan? Timeout => null;
 
         public async Task RunAsync()
         {

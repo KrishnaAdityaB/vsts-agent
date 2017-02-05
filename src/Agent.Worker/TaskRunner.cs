@@ -46,6 +46,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
         public TaskInstance TaskInstance { get; set; }
 
+        public TimeSpan? Timeout => (TaskInstance?.TimeoutInMinutes ?? 0) > 0 ? (TimeSpan?)TimeSpan.FromMinutes(TaskInstance.TimeoutInMinutes) : null;
+
         public async Task RunAsync()
         {
             // Validate args.

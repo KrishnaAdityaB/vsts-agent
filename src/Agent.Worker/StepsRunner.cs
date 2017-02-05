@@ -19,6 +19,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
         IExecutionContext ExecutionContext { get; set; }
         // Always runs. Even if a previous critical step failed.
         bool Finally { get; }
+        TimeSpan? Timeout { get; }
         Task RunAsync();
     }
 
@@ -79,13 +80,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
                 // Run the step.
                 Trace.Info("Starting the step.");
-                TimeSpan? stepTimeout = null;
-                if (step is ITaskRunner && (step as ITaskRunner).TaskInstance.TimeoutInMinutes > 0)
-                {
-                    stepTimeout = TimeSpan.FromMinutes((step as ITaskRunner).TaskInstance.TimeoutInMinutes);
-                }
-
-                step.ExecutionContext.Start(timeout: stepTimeout);
+                step.ExecutionContext.Start(timeout: step.Timeout);
                 List<OperationCanceledException> allCancelExceptions = new List<OperationCanceledException>();
                 try
                 {
