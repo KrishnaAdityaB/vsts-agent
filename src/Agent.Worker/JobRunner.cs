@@ -65,6 +65,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 jobContext.InitializeJob(message, jobRequestCancellationToken);
                 Trace.Info("Starting the job execution context.");
                 jobContext.Start();
+                jobContext.Section(StringUtil.Loc("StepStarting", message.JobName));
 
                 // Set agent version into ExecutionContext's variables dictionary.
                 jobContext.Variables.Set(Constants.Variables.Agent.Version, Constants.Agent.Version);
@@ -245,6 +246,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
         private async Task<TaskResult> CompleteJobAsync(IJobServer jobServer, IExecutionContext jobContext, AgentJobRequestMessage message, TaskResult? taskResult = null)
         {
+            jobContext.Section(StringUtil.Loc("StepFinishing", message.JobName));
             TaskResult result = jobContext.Complete(taskResult);
             
             if (!jobContext.Features.HasFlag(PlanFeatures.JobCompletedPlanEvent))

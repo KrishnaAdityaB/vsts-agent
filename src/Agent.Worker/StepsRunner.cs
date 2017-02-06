@@ -56,11 +56,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
                 jobContext.Progress(stepCount++ * 100 / steps.Count);
 
+                // Start.
+                step.ExecutionContext.Start();
+
                 // Test critical failure.
                 if (criticalStepFailed && !step.Finally)
                 {
                     Trace.Info("Skipping step due to previous critical step failure.");
-                    step.ExecutionContext.Skip();
+                    step.ExecutionContext.Complete(TaskResult.Skipped);
                     continue;
                 }
 
@@ -75,12 +78,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 if (!expressionManager.Evaluate(step.ExecutionContext, step.Condition))
                 {
                     Trace.Info("Skipping step due to condition evaluation.");
+                    step.ExecutionContext.Complete(TaskResult.Skipped);
                     continue;
                 }
 
                 // Run the step.
                 Trace.Info("Starting the step.");
-                step.ExecutionContext.Start(timeout: step.Timeout);
+                step.ExecutionContext.Section(StringUtil.Loc("StepStarting", step.DisplayName));
+                if (step.Timeout != null)
+                {
+                    step.ExecutionContext.SetTimeout(timeout: step.Timeout.Value);
+                }
+
                 List<OperationCanceledException> allCancelExceptions = new List<OperationCanceledException>();
                 try
                 {
@@ -181,6 +190,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 }
 
                 // Complete the step context.
+                step.ExecutionContext.Section(StringUtil.Loc("StepFinishing", step.DisplayName));
                 step.ExecutionContext.Complete();
 
                 // Update the step failed flags.

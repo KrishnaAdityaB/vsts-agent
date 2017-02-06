@@ -1,9 +1,4 @@
-﻿using Microsoft.VisualStudio.Services.Agent.Util;
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-
-namespace Microsoft.VisualStudio.Services.DistributedTask.Expressions
+﻿namespace Microsoft.VisualStudio.Services.DistributedTask.Expressions
 {
     public sealed class EvaluationContext
     {
