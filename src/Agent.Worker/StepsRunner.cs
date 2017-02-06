@@ -44,7 +44,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             //  Succeeded
             //  SucceededWithIssues
             bool stepFailed = false;
-            bool criticalStepFailed = false;
+            bool criticalFailure = false;
             int stepCount = 0;
             jobContext.Variables.Agent_JobStatus = TaskResult.Succeeded;
             foreach (IStep step in steps)
@@ -60,9 +60,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 step.ExecutionContext.Start();
 
                 // Test critical failure.
-                if (criticalStepFailed && !step.Finally)
+                if (criticalFailure && !step.Finally)
                 {
-                    Trace.Info("Skipping step due to previous critical step failure.");
+                    Trace.Info("Skipping step due to previous critical failure.");
                     step.ExecutionContext.Complete(TaskResult.Skipped);
                     continue;
                 }
@@ -75,7 +75,20 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 // Condition.
                 step.ExecutionContext.Debug($"Evaluating condition for step: '{step.DisplayName}'");
                 var expressionManager = HostContext.GetService<IExpressionManager>();
-                if (!expressionManager.Evaluate(step.ExecutionContext, step.Condition))
+                bool condition;
+                try
+                {
+                    condition = expressionManager.Evaluate(step.ExecutionContext, step.Condition);
+                }
+                catch (Exception ex)
+                {
+                    step.ExecutionContext.Error(ex);
+                    step.ExecutionContext.Complete(TaskResult.Failed);
+                    criticalFailure = true;
+                    continue;
+                }
+
+                if (!condition)
                 {
                     Trace.Info("Skipping step due to condition evaluation.");
                     step.ExecutionContext.Complete(TaskResult.Skipped);
@@ -195,7 +208,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
                 // Update the step failed flags.
                 stepFailed = stepFailed || step.ExecutionContext.Result == TaskResult.Failed;
-                criticalStepFailed = criticalStepFailed || (step.Critical && step.ExecutionContext.Result == TaskResult.Failed);
+                criticalFailure = criticalFailure || (step.Critical && step.ExecutionContext.Result == TaskResult.Failed);
 
                 // Update the job result.
                 if (step.ExecutionContext.Result == TaskResult.Failed)
@@ -210,7 +223,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     jobContext.Variables.Agent_JobStatus = TaskResult.SucceededWithIssues;
                 }
 
-                Trace.Info($"Current state: job state = '{jobContext.Result}', step failed = {stepFailed}, critical step failed = {criticalStepFailed}");
+                Trace.Info($"Current state: job state = '{jobContext.Result}', step failed = {stepFailed}, critical failure = {criticalFailure}");
             }
         }
     }
