@@ -162,55 +162,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Worker
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Worker")]
-        public async Task SkipsWhenConditionIsFalse()
-        {
-            using (TestHostContext hc = CreateTestContext())
-            {
-                // Arrange.
-                var variableSets = new[]
-                {
-                    new
-                    {
-                        Steps = new[] { CreateStep(TaskResult.Failed), CreateStep(TaskResult.Succeeded, condition: "false") },
-                        Expected = TaskResult.Failed,
-                    },
-                    new
-                    {
-                        Steps = new[] { CreateStep(TaskResult.Failed), CreateStep(TaskResult.Succeeded, condition: "false", isFinally: true) },
-                        Expected = TaskResult.Failed,
-                    },
-                    new
-                    {
-                        Steps = new[] { CreateStep(TaskResult.Succeeded), CreateStep(TaskResult.Succeeded, condition: "false") },
-                        Expected = TaskResult.Succeeded,
-                    },
-                    new
-                    {
-                        Steps = new[] { CreateStep(TaskResult.Succeeded), CreateStep(TaskResult.Succeeded, condition: "false", isFinally: true) },
-                        Expected = TaskResult.Succeeded,
-                    },
-                };
-                foreach (var variableSet in variableSets)
-                {
-                    _ec.Object.Result = null;
-
-                    // Act.
-                    await _stepsRunner.RunAsync(
-                        jobContext: _ec.Object,
-                        steps: variableSet.Steps.Select(x => x.Object).ToList());
-
-                    // Assert.
-                    Assert.Equal(variableSet.Expected, _ec.Object.Result ?? TaskResult.Succeeded);
-                    Assert.Equal(2, variableSet.Steps.Length);
-                    variableSet.Steps[0].Verify(x => x.RunAsync());
-                    variableSet.Steps[1].Verify(x => x.RunAsync(), Times.Never());
-                }
-            }
-        }
-
-        [Fact]
-        [Trait("Level", "L0")]
-        [Trait("Category", "Worker")]
         public async Task SetsJobResultCorrectly()
         {
             using (TestHostContext hc = CreateTestContext())
@@ -332,9 +283,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Worker
                 {
                     _ec.Object.Result = null;
 
-                    Mock<IExecutionContext> stepContext = CreateStepContext();
-                    variableSet[1].Setup(x => x.ExecutionContext).Returns(stepContext.Object);
-
                     // Act.
                     await _stepsRunner.RunAsync(
                         jobContext: _ec.Object,
@@ -371,9 +319,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Worker
                 {
                     _ec.Object.Result = null;
 
-                    Mock<IExecutionContext> stepContext = CreateStepContext();
-                    variableSet[1].Setup(x => x.ExecutionContext).Returns(stepContext.Object);
-
                     // Act.
                     await _stepsRunner.RunAsync(
                         jobContext: _ec.Object,
@@ -384,6 +329,94 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Worker
                     Assert.Equal(2, variableSet.Length);
                     variableSet[0].Verify(x => x.RunAsync());
                     variableSet[1].Verify(x => x.RunAsync(), Times.Never());
+                }
+            }
+        }
+
+        [Fact]
+        [Trait("Level", "L0")]
+        [Trait("Category", "Worker")]
+        public async Task SkipsWhenConditionIsFalse()
+        {
+            using (TestHostContext hc = CreateTestContext())
+            {
+                // Arrange.
+                var variableSets = new[]
+                {
+                    new
+                    {
+                        Steps = new[] { CreateStep(TaskResult.Failed), CreateStep(TaskResult.Succeeded, condition: "false") },
+                        Expected = TaskResult.Failed,
+                    },
+                    new
+                    {
+                        Steps = new[] { CreateStep(TaskResult.Failed), CreateStep(TaskResult.Succeeded, condition: "false", isFinally: true) },
+                        Expected = TaskResult.Failed,
+                    },
+                    new
+                    {
+                        Steps = new[] { CreateStep(TaskResult.Succeeded), CreateStep(TaskResult.Succeeded, condition: "false") },
+                        Expected = TaskResult.Succeeded,
+                    },
+                    new
+                    {
+                        Steps = new[] { CreateStep(TaskResult.Succeeded), CreateStep(TaskResult.Succeeded, condition: "false", isFinally: true) },
+                        Expected = TaskResult.Succeeded,
+                    },
+                };
+                foreach (var variableSet in variableSets)
+                {
+                    _ec.Object.Result = null;
+
+                    // Act.
+                    await _stepsRunner.RunAsync(
+                        jobContext: _ec.Object,
+                        steps: variableSet.Steps.Select(x => x.Object).ToList());
+
+                    // Assert.
+                    Assert.Equal(variableSet.Expected, _ec.Object.Result ?? TaskResult.Succeeded);
+                    Assert.Equal(2, variableSet.Steps.Length);
+                    variableSet.Steps[0].Verify(x => x.RunAsync());
+                    variableSet.Steps[1].Verify(x => x.RunAsync(), Times.Never());
+                }
+            }
+        }
+
+        [Fact]
+        [Trait("Level", "L0")]
+        [Trait("Category", "Worker")]
+        public async Task TreatsConditionErrorAsCritical()
+        {
+            using (TestHostContext hc = CreateTestContext())
+            {
+                // Arrange.
+                var variableSets = new[]
+                {
+                    new
+                    {
+                        Steps = new[] { CreateStep(TaskResult.Succeeded, condition: "nosuch()"), CreateStep(TaskResult.Succeeded, condition: "always()", isFinally: false) },
+                        Expected = false,
+                    },
+                    new
+                    {
+                        Steps = new[] { CreateStep(TaskResult.Succeeded, condition: "nosuch()"), CreateStep(TaskResult.Succeeded, condition: "always()", isFinally: true) },
+                        Expected = true,
+                    },
+                };
+                foreach (var variableSet in variableSets)
+                {
+                    _ec.Object.Result = null;
+
+                    // Act.
+                    await _stepsRunner.RunAsync(
+                        jobContext: _ec.Object,
+                        steps: variableSet.Steps.Select(x => x.Object).ToList());
+
+                    // Assert.
+                    Assert.Equal(TaskResult.Failed, _ec.Object.Result ?? TaskResult.Succeeded);
+                    Assert.Equal(2, variableSet.Steps.Length);
+                    variableSet.Steps[0].Verify(x => x.RunAsync(), Times.Never());
+                    variableSet.Steps[1].Verify(x => x.RunAsync(), variableSet.Expected ? Times.Once() : Times.Never());
                 }
             }
         }
@@ -400,20 +433,21 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Worker
             step.Setup(x => x.RunAsync()).Returns(Task.CompletedTask);
 
             // Setup the step execution context.
-            Mock<IExecutionContext> stepContext = CreateStepContext(result);
-            step.Setup(x => x.ExecutionContext).Returns(stepContext.Object);
-
-            return step;
-        }
-
-        private Mock<IExecutionContext> CreateStepContext(TaskResult? result = null)
-        {
             var stepContext = new Mock<IExecutionContext>();
             stepContext.SetupAllProperties();
             stepContext.Setup(x => x.Variables).Returns(_variables);
+            stepContext.Setup(x => x.Complete(It.IsAny<TaskResult?>(), It.IsAny<string>()))
+                .Callback((TaskResult? r, string currentOperation) =>
+                {
+                    if (r != null)
+                    {
+                        stepContext.Object.Result = r;
+                    }
+                });
             stepContext.Object.Result = result;
+            step.Setup(x => x.ExecutionContext).Returns(stepContext.Object);
 
-            return stepContext;
+            return step;
         }
 
         private string FormatSteps(IEnumerable<Mock<IStep>> steps)
